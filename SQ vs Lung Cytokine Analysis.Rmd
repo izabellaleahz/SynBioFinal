@@ -1,0 +1,636 @@
+---
+title: "SQ vs Lung Single Cell Analysis"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  tidy = TRUE,
+  tidy.opts = list(width.cutoff = 120),
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+### Load In Myeloid Pre Processed Data 
+Load Data Set 
+
+```{r init}
+library(dplyr)
+library(Seurat)
+
+```
+
+```{r load}
+# Load the PBMC dataset
+cellData <- readRDS(file = "./mye3_w_alvmac_3_mitoThreshold_scaled_seuratv3.rds")
+
+cellData
+```
+
+### Preform PCA on the data 
+
+PCA on the scaled data. 
+
+```{r pca,results='hide'}
+cellData <- RunPCA(object = cellData, features = VariableFeatures(object = cellData))
+```
+
+Jack Straw plot - to see dimentions and cut off for PCs
+```{r jackstraw, fig.height=6, fig.width=10}
+# NOTE: This process can take a long time for big datasets, comment out for expediency. More approximate techniques such as those implemented in ElbowPlot() can be used to reduce computation time
+cellData <- JackStraw(object = cellData, num.replicate = 100)
+cellData <- ScoreJackStraw(object = cellData, dims = 1:20)
+```
+
+
+Elbow plot 
+
+```{r elbow_plot, fig.height=6, fig.width=10}
+ElbowPlot(object = cellData)
+```
+
+
+Heat Maps of PCs - can see which ones are clean and distinct 
+
+```{r multi-heatmap, fig.height=12, fig.width=9}
+DimHeatmap(object = cellData, dims = 1:15, cells = 500, balanced = TRUE)
+```
+
+### Cell Clustering 
+
+CLuster them based on neighboors
+
+```{r cluster, fig.height=5, fig.width=7}
+cellData <- FindNeighbors(object = cellData, dims = 1:20)
+cellData <- FindClusters(object = cellData, resolution = 0.4)
+
+```
+
+
+```{r tsne, fig.height=5, fig.width=7}
+cellData <- RunUMAP(object = cellData, dims = 1:20)
+```
+Draw UMAP Plot 
+
+
+```{r tsneplot, fig.height=5, fig.width=7}
+# note that you can set `label = TRUE` or use the LabelClusters function to help label individual clusters
+DimPlot(object = cellData, reduction = 'umap')
+```
+Save the UMAP plot to the file
+
+```{r saveobject, eval=FALSE}
+saveRDS(cellData, file = "./processed.rds")
+```
+
+### Labeling the Cell clusters 
+
+
+Find the pos distinct markers for each cluster across the data 
+
+```{r markers1, fig.height=8, fig.width=15}
+
+cellData <- readRDS(file="./processed.rds")
+cellData.markers <- FindAllMarkers(object = cellData, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+```
+
+```{r markers2, fig.height=8, fig.width=15}
+cellData.markers %>% group_by(cluster) %>% top_n(n = 15, wt = avg_logFC)
+
+```
+11 - DCs
+SIGLECH
+CCR9
+ATP1B1
+SELL
+LY6D
+SPIB
+KLK1
+SLA2
+CD4
+IGHM
+TEX2
+TCF4
+RUNX2
+BST2
+IRF8
+
+7 - Mac
+TOP2A
+ANLN
+KIF23
+RRM1
+MARCO
+KRT79
+CTSK
+KRT19
+CHI3L3
+CAR4
+ATP6V0D2
+MKI67
+LPL
+SORT1
+TUBB5
+
+
+10 - Dendritic Cells
+ITGAE
+CKB
+SEPT3
+CLEC9A
+BTLA
+FLT3
+XCR1
+ARSB
+WDFY4
+PLBD1
+CST3
+NAAA
+IRF8
+RAB43
+RAB43
+
+9 - Mac
+GPNMB
+PSAP
+ANPEP
+CTSD
+CTSS
+CD63
+CTSB
+PLD3
+TREM2
+HEXA
+LGALS3
+MYO5A
+APOE
+LGALS3BP
+MFGE8
+
+7 - Pre B or T cell 
+TOP2A
+MKI67
+NCAPD2
+KIF11
+CCNA2
+BIRC5
+CENPE
+CDK1
+D17H6S56E-5
+MCM5
+RRM1
+TUBB5
+MCM6
+MCM3
+TMPO
+
+
+8 - Mono Ly6c-
+ACE
+EMR4
+SPN
+CD300E
+ITGAL
+SLC12A2
+TREML4
+ENO3
+ZFYVE9
+CEACAM1
+PGLYRP1
+CYFIP2
+STK10
+DUSP16
+NR4A1
+
+0 - Mac AVL_LU or Gran 
+CHI3L3
+LPL
+EAR2
+CTSD
+ATP6V0D2
+ABCG1
+CTSK
+KRT19
+KRT79
+CD9
+CAR4
+F7
+KLHDC4
+DST
+GDF15
+
+6 - Stroma or DC
+FSCN1
+CCR7
+CCL22
+CACNB3
+TMEM123
+TBC1D4
+CCL5
+SERPINB9
+SERPINB6B
+IL4I1
+RAMP3
+SLC4A8
+ADCY6
+IL12B
+ROGDI
+
+
+5 - DC or Mac
+CD209A
+IL1R2
+ITGAE
+H2-EB1
+H2-AB1
+NAPSA
+H2-DMB2
+H2-AA
+KMO
+CCL17
+MGL2
+CST3
+IFITM1
+CDH1
+MDH2
+
+
+4 - Monocytes Ly6C+
+HP
+LY6C2
+PLAC8
+CD177
+IFITM3
+CD97
+SELL
+SORL1
+MS4A4C
+EMILIN2
+ITGB7
+SAMHD1
+CCR2
+ARL5C
+RNF213
+
+1 - Mac AT
+CCL8
+CD163
+CBR2
+CCL7
+SEPP1
+GAS6
+FOLR2
+C4B
+STAB1
+LYVE1
+F13A1
+FCNA
+CCL2
+FCGRT
+TIMP2
+
+
+12 - Mac AVL_LU
+CHI3L3
+EAR2
+LPL
+ATP6V0D2
+ABCG1
+KRT19
+CD9
+CAR4
+KRT79
+SORT1
+EAR1
+1600029D21RIK
+SERPINE1
+ADIPOR2
+SIGLEC5
+
+3 - Gran 
+THBS1
+PTGS2
+VCAN
+IL1B
+CD14
+SDC4
+ITGAM
+CCR2
+TGFBI
+VEGFA
+ERRFI1
+OSM
+IL1RN
+MMP19
+FN1
+
+2 - Gran 
+MMP12
+MMP9
+MMP13
+ARG1
+CCL24
+INHBA
+TNFRSF9
+ACP5
+MMP14
+ADAM8
+PLA2G7
+CLEC4N
+VEGFA
+SPP1
+CXCL3
+
+Macrophage - Cd14,Cd16,Cd64, CD68, Cd71, CCR5
+CD64 - FCGR1
+CD68 - CD68 
+CD71 - TFRC
+
+M1
+CD68 - CD68
+CD80 - CD80
+CD86 - CD86
+IL-1R - IL1R1
+TLR2 - TLR2
+TLR4 - TLR4
+iNOS - NOS2
+SOCS3
+
+# 10, 12, 3, 
+```{r markerplots mac, fig.height=8, fig.width=15}
+#General Mac Markers
+VlnPlot(object = cellData, features = c("FCGR1", "CD68", "TFRC", "CCR5"))
+#M1 Markers 
+VlnPlot(object = cellData, features = c("CD68", "CD80", "CD86", "IL1R1", "TLR2", "TLR4", "NOS2", "SOCS3"))
+
+#FeaturePlot(cellData, reduction = "umap", features = c("FCGR3A", "MS4A7"))
+```
+
+
+M2: # 3 
+CD115 - CSF1R
+CD204 - MSR1
+CD163
+CD206 (MMR) - MRC1
+CD209 (DC-SIGN) - CD209A
+FcεR1 - FC
+VSIG4
+```{r markerplots mac169, fig.height=8, fig.width=15}
+#169+
+VlnPlot(object = cellData, features = c("SIGLEC1", "ITGAX"))
+
+#M2 Macrophages 
+VlnPlot(object = cellData, features = c("CSF1R", "MSR1","CD163","MRC1", "CD209A", "FC", "VSIG4"))
+```
+```{r markerplots mmm, fig.height=8, fig.width=15}
+#Mature Mac Marker 
+VlnPlot(object = cellData, features = c("MSR1"))
+
+```
+
+Monocyte - CD14+, CD16-/+ (two subsets) and LY6C lo and high subsets 
+CD31 - PECAM1 
+CD32 - FCGR2B
+CD11b - ITGAM
+CD43/Ly48 - SPN
+CD45 - PTPRC
+CD62L - SELL
+CD115 - CSF1R
+F4/80 - ADGRE1
+GR1 - GSR
+VEGF - vegfa
+
+Monocyte Surface: 
+CSF1R
+LY6C
+
+```{r markerplots mono1, fig.height=8, fig.width=15}
+VlnPlot(object = cellData, features = c("CSF1R",  "LY6C2", "LY6A"))
+
+```
+LyC6+ - #4
+
+```{r markerplots mono2, fig.height=8, fig.width=15}
+VlnPlot(object = cellData, features = c("LY6C2","CCR1", "CCR2","ITGAM", "FCGR2B", "PECAM1", "SPN", "CD44", "PTPRC", "SELL", "CSF1R", "CX3CR1", "ADGRE1", "GSR", "VEGFA" ))
+
+```
+
+CMP - key marker CD123 - IL3RA
+```{r markerplots CMP, fig.height=8, fig.width=15}
+VlnPlot(object = cellData, features = c("IL3RA"))
+
+```
+
+Mast Cell 
+CD117 - KIT
+FCER1 - CDCA7L and RRM1
+```{r markerplots Mast, fig.height=8, fig.width=15}
+VlnPlot(object = cellData, features = c("KIT", "CDCA7L","RRM1"))
+
+```
+
+
+Neutrophil
+CD66a - CEACAM1, CEACAM2
+Ly6G
+```{r markerplots Neu, fig.height=8, fig.width=15}
+VlnPlot(object = cellData, features = c("CEACAM1", "CEACAM2", "LY6G"))
+
+```
+
+
+Basophil -
+FCER1 - CDCA7L and RRM1
+```{r markerplots Bas, fig.height=8, fig.width=15}
+VlnPlot(object = cellData, features = c("CDCA7L", "RRM1"))
+
+```
+Eosphil
+Cd170 - SIGLECF
+CCR3/CD193
+```{r markerplots Eos, fig.height=8, fig.width=15}
+VlnPlot(object = cellData, features = c("SIGLECF", "CCR3"))
+
+```
+
+Names 
+"Gran", "Gran, "Mac","Mac", "Ly6C+ Mono", "DC/Mac", "Mac/Stroma", "Mac/Gran", "LyC6- Mono", "Pre T/B", "Mac", "DC", "Mac", "DC"
+
+Cd170 - SIGLECF
+CCR3/CD193
+```{r nameing, fig.height=8, fig.width=15}
+
+
+new.cluster.ids <- c("Gran", "Mac", "Gran", "Gran", "Ly6C+ Mono", "DC/Mac", "Mac/Stroma", "Mac/Gran", "LyC6- Mono", "Mac", "DC", "DC", "Mac")
+names(new.cluster.ids) <- levels(cellData)
+cellData <- RenameIdents(cellData, new.cluster.ids)
+DimPlot(cellData, reduction = "umap", label = TRUE, pt.size = 0.5)
+
+```
+
+
+```{r save, fig.height=8, fig.width=15}
+saveRDS(cellData, file = "monocyteData.rds")
+
+```
+
+```{r UMAP}
+DimPlot(cellData, reduction = "umap", label = TRUE, pt.size = 0.5)
+```
+
+## Counting Cells 
+```{r count, fig.height=8, fig.width=15}
+
+cellData <- readRDS(file = "./monocyteData.rds")
+
+
+table(Idents(cellData))
+
+table(Idents(cellData), cellData$loctreat)
+```
+
+
+```{r heatmap}
+#cluster.averages <- AverageExpression(cellData, return.seurat = TRUE, add.ident = "loctreat")
+
+DoHeatmap(cluster.averages, features = unlist(TopFeatures(cellData[["pca"]], balanced = TRUE)), size = 3, 
+    draw.lines = FALSE)
+
+cellData$CellType <- Idents(cellData)
+
+```
+
+
+
+```{r keycytokines}
+
+Idents(cellData) <- "loctreat"
+Idents(cellData)
+cluster.averages <- AverageExpression(cellData, return.seurat = TRUE, add.ident = "CellType")
+
+featuresCytokines = c("IL2", "IL12A", "IL12B","IL6")
+
+DoHeatmap(cellData, features = unlist(featuresCytokines), size = 5, 
+    draw.lines = TRUE, group.by = "CellType")
+
+# T_L  T_Q UT_L UT_Q
+
+```
+
+#Inhibitory / Stim Markers on Monocytes 
+
+PD1 - PDCD1
+PDL1 - CD274
+   
+
+```{r loctreat}
+#Idents(cellData) <- "loctreat"
+
+#cluster.averages <- AverageExpression(cellData, return.seurat = TRUE)
+
+features<- c("CCL2", "IFNG", "IL1A", "IL1B", "IL15", "IL18", "IFN", "CSF1", "IL12A", "IL12B")
+badFeatures <- c("IL4", "IL13", "TGFB1", "TGFB2", "PTGER3", "IL6", "CCL5", "IL10", "HIF1A")
+growthFactors <- c( "VEGFA", "MMP2", "MMP13", "MMP14", "MMP15", "MMP16", "MMP17")
+#PGE2 = PTGER3
+
+DotPlot(object = cluster.averages, features = badFeatures)
+```
+
+```{r counts of cells}
+library(ggplot)
+
+tableSub <- table(Idents(cellData), cellData$loctreat)
+
+
+tabledf <- as.data.frame(tableSub)
+
+
+barplot(tableSub, main="Counts",
+   xlab="Condition", hue=col(tableSub),
+  legend = rownames(tableSub), )
+
+ggplot(data=tabledf, aes(x=Var2, y=Freq, fill=Var1)) +
+geom_bar(stat="identity", position=position_dodge())
+
+```
+
+
+Pathway analysis
+```{r}
+rm(list=ls())
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(cowplot)
+library(gridExtra)    
+library(EnhancedVolcano)
+```
+
+
+```{r}
+seurat <- readRDS("./monocyteData.rds")
+
+seurat <- subset(x = seurat, subset = loctreat == "T_Q" & "T_L")
+unique(seurat$loctreat)
+```
+
+
+```{r}
+# pathway scoring
+library(fgsea)
+library(GSA)
+g <- rownames(GetAssayData(seurat, slot = "data"))
+
+kegg = GSA.read.gmt("./biocarta.gmt")
+```
+
+```{r}
+for (i in 1:length(kegg$geneset.names)) {
+  set_name <- kegg$geneset.names[i]
+  seurat = AddModuleScore(seurat, features = kegg[[1]][i], name = set_name)
+}
+```
+
+```{r}
+colnames(seurat@meta.data)
+```
+
+```{r}
+kegg = GSA.read.gmt("./kegg.gmt")
+```
+
+```{r}
+pvals =c()
+dir =c()
+for (i in 1:length(kegg$geneset.names)) {
+  data = seurat@meta.data[,paste0(kegg$geneset.names[i],1)]
+  result = wilcox.test(data[seurat$seurat_clusters == 0], data[seurat$seurat_clusters == 1])
+  pvals = c(pvals, result$p.value)
+ direction = ifelse(mean(data[seurat$seurat_clusters == 0]) > mean(data[seurat$seurat_clusters ==1]), 'Up', 'Down')
+    dir = c(dir, direction)
+}
+df = data.frame(path = kegg$geneset.names, pval = pvals, direction = dir)
+df = df[order(df$pval),]
+#df$origin = 'kegg'
+df$path = as.character(df$path)
+df
+write.csv(df, "biocarta.csv")
+
+palette = c('#3e58a8', '#ee3424')
+
+df$path = sapply(df$path, function(x) gsub(x= x, pattern = "KEGG_", replacement = ""))
+plot_hallmarks <- ggplot(df[1:30,], aes(y = path, x = -log10(pval), fill = direction)) + 
+  geom_col() + scale_y_discrete(limits = rev(df$path[1:30])) +
+  scale_fill_manual(values = palette) +
+  guides(fill = FALSE) + labs(y = c()) + 
+  theme(panel.border = element_rect(colour = "black", fill=NA), panel.background = element_blank()) +
+  ggtitle("L_v_Q_biocarta")
+
+#pdf(file="zsgreen_tumor_cells_pdfs/pathway_biocarta.pdf", width = 6, height = 4)
+plot_hallmarks
+```
+
+
+
+
